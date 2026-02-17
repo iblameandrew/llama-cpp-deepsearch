@@ -31,7 +31,7 @@ Most web research tools send your queries to external APIs, compromising privacy
 - **SearXNG** - Self-hosted metasearch engine
 
 ### Research Capabilities
-- Iterative research with configurable depth (1-10 loops)
+- Iterative research with configurable depth (1-50 loops)
 - Automatic query generation and refinement
 - Knowledge gap analysis and follow-up queries
 - Source deduplication and citation

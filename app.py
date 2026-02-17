@@ -2,18 +2,16 @@ import json
 import os
 import streamlit as st
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 CONFIG_FILE = Path.home() / ".local-deep-researcher" / "config.json"
 
 
 def ensure_config_dir() -> None:
-    """Ensure the config directory exists."""
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 
 def load_config() -> dict[str, Any]:
-    """Load configuration from JSON file."""
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r") as f:
@@ -24,7 +22,6 @@ def load_config() -> dict[str, Any]:
 
 
 def save_config(config: dict[str, Any]) -> None:
-    """Save configuration to JSON file."""
     ensure_config_dir()
     existing = load_config()
     existing.update(config)
@@ -33,7 +30,6 @@ def save_config(config: dict[str, Any]) -> None:
 
 
 def get_config_value(key: str, default: Any = None) -> Any:
-    """Get a config value, first checking Streamlit session state, then config file."""
     if key in st.session_state:
         return st.session_state[key]
     saved = load_config()
@@ -41,16 +37,13 @@ def get_config_value(key: str, default: Any = None) -> Any:
 
 
 def set_config_value(key: str, value: Any) -> None:
-    """Set a config value in both session state and save to file."""
     st.session_state[key] = value
     save_config({key: value})
 
 
 def main():
     st.set_page_config(
-        page_title="Local Deep Researcher",
-        page_icon="🔍",
-        layout="wide",
+        page_title="Local Deep Researcher", page_icon="🔍", layout="wide"
     )
 
     st.title("🔍 Local Deep Researcher")
@@ -69,8 +62,7 @@ def main():
         set_config_value("llm_provider", llm_provider)
 
         local_llm = st.text_input(
-            "Model Name",
-            value=get_config_value("local_llm", "llama3.2"),
+            "Model Name", value=get_config_value("local_llm", "llama3.2")
         )
         set_config_value("local_llm", local_llm)
 
@@ -80,14 +72,12 @@ def main():
                 value=get_config_value("ollama_base_url", "http://localhost:11434/"),
             )
             set_config_value("ollama_base_url", ollama_base_url)
-
         elif llm_provider == "lmstudio":
             lmstudio_base_url = st.text_input(
                 "LMStudio Base URL",
                 value=get_config_value("lmstudio_base_url", "http://localhost:1234/v1"),
             )
             set_config_value("lmstudio_base_url", lmstudio_base_url)
-
         elif llm_provider == "llama_cpp":
             llama_cpp_base_url = st.text_input(
                 "llama-cpp Base URL",
@@ -96,7 +86,6 @@ def main():
                 ),
             )
             set_config_value("llama_cpp_base_url", llama_cpp_base_url)
-
         elif llm_provider == "openrouter":
             openrouter_api_key = st.text_input(
                 "OpenRouter API Key",
@@ -104,7 +93,6 @@ def main():
                 value=get_config_value("openrouter_api_key", ""),
             )
             set_config_value("openrouter_api_key", openrouter_api_key)
-
             openrouter_model = st.text_input(
                 "OpenRouter Model",
                 value=get_config_value(
@@ -114,7 +102,6 @@ def main():
             set_config_value("openrouter_model", openrouter_model)
 
         st.divider()
-
         st.subheader("🔎 Search Settings")
 
         search_api = st.selectbox(
@@ -142,31 +129,26 @@ def main():
             set_config_value("perplexity_api_key", perplexity_api_key)
         elif search_api == "searxng":
             searxng_url = st.text_input(
-                "SearXNG URL",
-                value=get_config_value("searxng_url", ""),
+                "SearXNG URL", value=get_config_value("searxng_url", "")
             )
             set_config_value("searxng_url", searxng_url)
 
         max_loops = st.slider(
             "Research Depth",
             min_value=1,
-            max_value=10,
+            max_value=50,
             value=get_config_value("max_web_research_loops", 3),
         )
         set_config_value("max_web_research_loops", max_loops)
 
         fetch_full_page = st.checkbox(
-            "Fetch Full Page Content",
-            value=get_config_value("fetch_full_page", True),
+            "Fetch Full Page Content", value=get_config_value("fetch_full_page", True)
         )
         set_config_value("fetch_full_page", fetch_full_page)
-
         use_tool_calling = st.checkbox(
-            "Use Tool Calling",
-            value=get_config_value("use_tool_calling", False),
+            "Use Tool Calling", value=get_config_value("use_tool_calling", False)
         )
         set_config_value("use_tool_calling", use_tool_calling)
-
         strip_thinking = st.checkbox(
             "Strip Thinking Tokens",
             value=get_config_value("strip_thinking_tokens", True),
@@ -174,7 +156,7 @@ def main():
         set_config_value("strip_thinking_tokens", strip_thinking)
 
         st.divider()
-        st.caption("Settings are saved to ~/.local-deep-researcher/config.json")
+        st.caption("Settings saved to ~/.local-deep-researcher/config.json")
 
     research_topic = st.text_area(
         "Enter your research topic:",
@@ -191,12 +173,22 @@ def main():
         if st.button("🗑️ Clear", use_container_width=True):
             st.session_state.research_result = None
             st.session_state.research_status = None
-            st.session_state.intermediate_results = []
+            st.session_state.research_steps = []
+            st.session_state.progress_message = ""
             st.rerun()
 
-    if start_button and research_topic:
-        from ollama_deep_researcher.graph import graph
+    for key in [
+        "research_result",
+        "research_status",
+        "research_steps",
+        "current_topic",
+        "current_config",
+        "progress_message",
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = None if key != "research_steps" else []
 
+    if start_button and research_topic:
         config = {
             "configurable": {
                 "llm_provider": get_config_value("llm_provider"),
@@ -225,86 +217,143 @@ def main():
             }
         }
 
+        if get_config_value("tavily_api_key"):
+            os.environ["TAVILY_API_KEY"] = get_config_value("tavily_api_key")
+        if get_config_value("perplexity_api_key"):
+            os.environ["PERPLEXITY_API_KEY"] = get_config_value("perplexity_api_key")
+        if get_config_value("searxng_url"):
+            os.environ["SEARXNG_URL"] = get_config_value("searxng_url")
+
         st.session_state.research_status = "running"
-        st.session_state.intermediate_results = []
-        st.session_state.research_result = None
+        st.session_state.research_steps = []
+        st.session_state.progress_message = "Starting research..."
+        st.session_state.current_topic = research_topic
+        st.session_state.current_config = config
 
-        tavily_key = get_config_value("tavily_api_key", "")
-        perplexity_key = get_config_value("perplexity_api_key", "")
-        searxng_url_val = get_config_value("searxng_url", "")
-        if tavily_key:
-            os.environ["TAVILY_API_KEY"] = tavily_key
-        if perplexity_key:
-            os.environ["PERPLEXITY_API_KEY"] = perplexity_key
-        if searxng_url_val:
-            os.environ["SEARXNG_URL"] = searxng_url_val
-
+    if st.session_state.get("research_status") == "running":
         progress_placeholder = st.empty()
-        progress_placeholder.info("🔄 Starting research...")
+
+        progress_placeholder.info(
+            f"🔄 {st.session_state.get('progress_message', 'Research in progress...')}"
+        )
+
+        from ollama_deep_researcher.graph import graph
 
         try:
+            steps = []
             final_result = {}
+
             for chunk in graph.stream(
-                {"research_topic": research_topic},
-                config=config,
+                {"research_topic": st.session_state.current_topic},
+                config=st.session_state.current_config,
             ):
                 if "generate_query" in chunk:
-                    thinking = chunk["generate_query"].get("current_thinking", "")
-                    if thinking:
-                        progress_placeholder.info(f"💭 {thinking}")
+                    data = chunk["generate_query"]
+                    st.session_state.progress_message = "🔍 Generating search query..."
+                    progress_placeholder.info("🔍 Generating search query...")
+                    steps.append(
+                        {
+                            "stage": "generate_query",
+                            "title": "🔍 Generating Search Query",
+                            "thinking": data.get("current_thinking", ""),
+                            "query": data.get("search_query", ""),
+                        }
+                    )
 
                 elif "web_research" in chunk:
                     data = chunk["web_research"]
                     query = data.get("last_search_query", "")
-                    thinking = data.get("current_thinking", "")
-                    if thinking:
-                        progress_placeholder.info(f"🔎 {thinking}")
-                    if query:
-                        progress_placeholder.info(f"🔎 Searching: {query}")
+                    st.session_state.progress_message = f"🌐 Searching: {query}"
+                    progress_placeholder.info(f"🌐 Searching: {query}")
+                    steps.append(
+                        {
+                            "stage": "web_research",
+                            "title": f"🌐 Web Search (Loop {data.get('research_loop_count', 0)})",
+                            "thinking": data.get("current_thinking", ""),
+                            "query": query,
+                            "sources": data.get("last_sources", ""),
+                        }
+                    )
 
                 elif "summarize_sources" in chunk:
-                    thinking = chunk["summarize_sources"].get("current_thinking", "")
-                    if thinking:
-                        progress_placeholder.info(f"📝 {thinking}")
+                    data = chunk["summarize_sources"]
+                    st.session_state.progress_message = "📝 Summarizing sources..."
+                    progress_placeholder.info("📝 Summarizing sources...")
+                    steps.append(
+                        {
+                            "stage": "summarize_sources",
+                            "title": "📝 Summarizing Sources",
+                            "thinking": data.get("current_thinking", ""),
+                            "summary": data.get("running_summary", ""),
+                        }
+                    )
 
                 elif "reflect_on_summary" in chunk:
-                    thinking = chunk["reflect_on_summary"].get("current_thinking", "")
-                    if thinking:
-                        progress_placeholder.info(f"🧠 {thinking}")
+                    data = chunk["reflect_on_summary"]
+                    st.session_state.progress_message = (
+                        "🧠 Reflecting on knowledge gaps..."
+                    )
+                    progress_placeholder.info("🧠 Reflecting on knowledge gaps...")
+                    steps.append(
+                        {
+                            "stage": "reflect_on_summary",
+                            "title": "🧠 Reflecting on Knowledge Gaps",
+                            "thinking": data.get("current_thinking", ""),
+                            "query": data.get("search_query", ""),
+                        }
+                    )
 
                 elif "finalize_summary" in chunk:
                     final_result = chunk["finalize_summary"]
-                    progress_placeholder.success("✅ Research complete!")
+
+                st.session_state.research_steps = steps
 
             st.session_state.research_result = final_result
             st.session_state.research_status = "complete"
-            st.rerun()
+            progress_placeholder.success("✅ Research Complete!")
 
         except Exception as e:
             st.session_state.research_status = "error"
             st.session_state.error_message = str(e)
             progress_placeholder.error(f"❌ Error: {str(e)}")
 
-    if st.session_state.get("research_status") == "running":
-        st.info(
-            "🔄 Research in progress... This may take a while depending on the number of research loops."
-        )
+        st.rerun()
 
     elif st.session_state.get("research_status") == "error":
         st.error(f"Error: {st.session_state.get('error_message', 'Unknown error')}")
 
     elif st.session_state.get("research_status") == "complete":
-        result = st.session_state.get("research_result", {})
-        summary = result.get("running_summary", "")
+        st.success("✅ Research Complete!", icon="🎉")
 
+        steps = st.session_state.get("research_steps", [])
+
+        for i, step in enumerate(steps):
+            with st.expander(f"{step['title']} (Step {i + 1})", expanded=True):
+                if step.get("thinking"):
+                    st.info(f"**Thinking:** {step['thinking']}")
+                if step.get("query"):
+                    st.markdown(f"**Query:** `{step['query']}`")
+                if step.get("sources"):
+                    st.markdown("**Sources:**")
+                    st.code(
+                        step["sources"][:5000] + "..."
+                        if len(step["sources"]) > 5000
+                        else step["sources"]
+                    )
+                if step.get("summary"):
+                    st.markdown("**Summary:**")
+                    st.markdown(
+                        step["summary"][:3000] + "..."
+                        if len(step["summary"]) > 3000
+                        else step["summary"]
+                    )
+
+        result = st.session_state.research_result or {}
+        summary = result.get("running_summary", "")
         if summary:
-            st.success("✅ Research Complete!")
             st.markdown("---")
+            st.markdown("## Final Report")
             st.markdown(summary)
-        else:
-            st.warning(
-                "No summary generated. Please check your configuration and try again."
-            )
 
 
 if __name__ == "__main__":
