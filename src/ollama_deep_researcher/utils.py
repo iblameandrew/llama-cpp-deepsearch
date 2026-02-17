@@ -300,6 +300,10 @@ def tavily_search(
                                             fetch_full_page is True
     """
 
+    MAX_QUERY_LENGTH = 400
+    if len(query) > MAX_QUERY_LENGTH:
+        query = query[:MAX_QUERY_LENGTH]
+
     tavily_client = TavilyClient()
     return tavily_client.search(
         query, max_results=max_results, include_raw_content=fetch_full_page

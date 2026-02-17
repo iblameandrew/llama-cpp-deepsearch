@@ -9,7 +9,6 @@ from langchain_core.runnables import RunnableConfig
 class SearchAPI(Enum):
     PERPLEXITY = "perplexity"
     TAVILY = "tavily"
-    DUCKDUCKGO = "duckduckgo"
     SEARXNG = "searxng"
 
 
@@ -26,13 +25,13 @@ class Configuration(BaseModel):
         title="LLM Model Name",
         description="Name of the LLM model to use",
     )
-    llm_provider: Literal["ollama", "lmstudio"] = Field(
+    llm_provider: Literal["ollama", "lmstudio", "llama_cpp", "openrouter"] = Field(
         default="ollama",
         title="LLM Provider",
-        description="Provider for the LLM (Ollama or LMStudio)",
+        description="Provider for the LLM (Ollama, LMStudio, llama-cpp, or OpenRouter)",
     )
-    search_api: Literal["perplexity", "tavily", "duckduckgo", "searxng"] = Field(
-        default="duckduckgo", title="Search API", description="Web search API to use"
+    search_api: Literal["perplexity", "tavily", "searxng"] = Field(
+        default="tavily", title="Search API", description="Web search API to use"
     )
     fetch_full_page: bool = Field(
         default=True,
@@ -58,6 +57,21 @@ class Configuration(BaseModel):
         default=False,
         title="Use Tool Calling",
         description="Use tool calling instead of JSON mode for structured output",
+    )
+    llama_cpp_base_url: str = Field(
+        default="http://127.0.0.1:8080/v1",
+        title="llama-cpp Base URL",
+        description="Base URL for llama-cpp-server OpenAI-compatible API",
+    )
+    openrouter_api_key: str = Field(
+        default="",
+        title="OpenRouter API Key",
+        description="API key for OpenRouter (get from https://openrouter.ai)",
+    )
+    openrouter_model: str = Field(
+        default="stepfun/step-3.5-flash:free",
+        title="OpenRouter Model",
+        description="Model to use on OpenRouter",
     )
 
     @classmethod

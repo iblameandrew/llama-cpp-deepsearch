@@ -8,6 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 from langgraph.graph import START, END, StateGraph
+from langchain_openai import ChatOpenAI
 
 from ollama_deep_researcher.configuration import Configuration, SearchAPI
 from ollama_deep_researcher.utils import (
@@ -15,7 +16,6 @@ from ollama_deep_researcher.utils import (
     tavily_search,
     format_sources,
     perplexity_search,
-    duckduckgo_search,
     searxng_search,
     strip_thinking_tokens,
     get_config_value,
@@ -36,10 +36,12 @@ from ollama_deep_researcher.prompts import (
     tool_calling_reflection_instructions,
 )
 from ollama_deep_researcher.lmstudio import ChatLMStudio
+from ollama_deep_researcher.llama_cpp import ChatLlamaCpp
 
 # Constants
 MAX_TOKENS_PER_SOURCE = 1000
 CHARS_PER_TOKEN = 4
+
 
 def generate_search_query_with_structured_output(
     configurable: Configuration,
@@ -50,7 +52,7 @@ def generate_search_query_with_structured_output(
     json_query_field: str,
 ):
     """Helper function to generate search queries using either tool calling or JSON mode.
-    
+
     Args:
         configurable: Configuration object
         messages: List of messages to send to LLM
@@ -58,7 +60,7 @@ def generate_search_query_with_structured_output(
         fallback_query: Fallback search query if extraction fails
         tool_query_field: Field name in tool args containing the query
         json_query_field: Field name in JSON response containing the query
-        
+
     Returns:
         Dictionary with "search_query" key
     """
@@ -68,14 +70,14 @@ def generate_search_query_with_structured_output(
 
         if not result.tool_calls:
             return {"search_query": fallback_query}
-        
+
         try:
             tool_data = result.tool_calls[0]["args"]
             search_query = tool_data.get(tool_query_field)
             return {"search_query": search_query}
         except (IndexError, KeyError):
             return {"search_query": fallback_query}
-    
+
     else:
         # Use JSON mode
         llm = get_llm(configurable)
@@ -93,6 +95,7 @@ def generate_search_query_with_structured_output(
             if configurable.strip_thinking_tokens:
                 content = strip_thinking_tokens(content)
             return {"search_query": fallback_query}
+
 
 def get_llm(configurable: Configuration):
     """Helper function to initialize LLM based on configuration.
@@ -119,6 +122,36 @@ def get_llm(configurable: Configuration):
                 temperature=0,
                 format="json",
             )
+    elif configurable.llm_provider == "llama_cpp":
+        if configurable.use_tool_calling:
+            return ChatLlamaCpp(
+                base_url=configurable.llama_cpp_base_url,
+                model=configurable.local_llm,
+                temperature=0,
+            )
+        else:
+            return ChatLlamaCpp(
+                base_url=configurable.llama_cpp_base_url,
+                model=configurable.local_llm,
+                temperature=0,
+                format="json",
+            )
+    elif configurable.llm_provider == "openrouter":
+        if configurable.use_tool_calling:
+            return ChatOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                model=configurable.openrouter_model,
+                temperature=0,
+                api_key=configurable.openrouter_api_key,
+            )
+        else:
+            return ChatOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                model=configurable.openrouter_model,
+                temperature=0,
+                api_key=configurable.openrouter_api_key,
+                response_format={"type": "json_object"},
+            )
     else:  # Default to Ollama
         if configurable.use_tool_calling:
             return ChatOllama(
@@ -133,6 +166,7 @@ def get_llm(configurable: Configuration):
                 temperature=0,
                 format="json",
             )
+
 
 # Nodes
 def generate_query(state: SummaryState, config: RunnableConfig):
@@ -171,29 +205,34 @@ def generate_query(state: SummaryState, config: RunnableConfig):
 
     messages = [
         SystemMessage(
-            content=formatted_prompt + (
-                tool_calling_query_instructions if configurable.use_tool_calling 
+            content=formatted_prompt
+            + (
+                tool_calling_query_instructions
+                if configurable.use_tool_calling
                 else json_mode_query_instructions
             )
         ),
         HumanMessage(content="Generate a query for web search:"),
     ]
 
-    return generate_search_query_with_structured_output(
-        configurable=configurable,
-        messages=messages,
-        tool_class=Query,
-        fallback_query=f"Tell me more about {state.research_topic}",
-        tool_query_field="query",
-        json_query_field="query",
-    )
+    return {
+        **generate_search_query_with_structured_output(
+            configurable=configurable,
+            messages=messages,
+            tool_class=Query,
+            fallback_query=f"Tell me more about {state.research_topic}",
+            tool_query_field="query",
+            json_query_field="query",
+        ),
+        "current_thinking": f"Generating search query for: {state.research_topic}",
+    }
 
 
 def web_research(state: SummaryState, config: RunnableConfig):
     """LangGraph node that performs web research using the generated search query.
 
     Executes a web search using the configured search API (tavily, perplexity,
-    duckduckgo, or searxng) and formats the results for further processing.
+    or searxng) and formats the results for further processing.
 
     Args:
         state: Current graph state containing the search query and research loop count
@@ -230,17 +269,6 @@ def web_research(state: SummaryState, config: RunnableConfig):
             max_tokens_per_source=MAX_TOKENS_PER_SOURCE,
             fetch_full_page=configurable.fetch_full_page,
         )
-    elif search_api == "duckduckgo":
-        search_results = duckduckgo_search(
-            state.search_query,
-            max_results=3,
-            fetch_full_page=configurable.fetch_full_page,
-        )
-        search_str = deduplicate_and_format_sources(
-            search_results,
-            max_tokens_per_source=MAX_TOKENS_PER_SOURCE,
-            fetch_full_page=configurable.fetch_full_page,
-        )
     elif search_api == "searxng":
         search_results = searxng_search(
             state.search_query,
@@ -259,6 +287,9 @@ def web_research(state: SummaryState, config: RunnableConfig):
         "sources_gathered": [format_sources(search_results)],
         "research_loop_count": state.research_loop_count + 1,
         "web_research_results": [search_str],
+        "last_search_query": state.search_query,
+        "last_sources": format_sources(search_results),
+        "current_thinking": f"Searching the web for: {state.search_query}",
     }
 
 
@@ -306,6 +337,19 @@ def summarize_sources(state: SummaryState, config: RunnableConfig):
             model=configurable.local_llm,
             temperature=0,
         )
+    elif configurable.llm_provider == "llama_cpp":
+        llm = ChatLlamaCpp(
+            base_url=configurable.llama_cpp_base_url,
+            model=configurable.local_llm,
+            temperature=0,
+        )
+    elif configurable.llm_provider == "openrouter":
+        llm = ChatOpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            model=configurable.openrouter_model,
+            temperature=0,
+            api_key=configurable.openrouter_api_key,
+        )
     else:  # Default to Ollama
         llm = ChatOllama(
             base_url=configurable.ollama_base_url,
@@ -325,7 +369,10 @@ def summarize_sources(state: SummaryState, config: RunnableConfig):
     if configurable.strip_thinking_tokens:
         running_summary = strip_thinking_tokens(running_summary)
 
-    return {"running_summary": running_summary}
+    return {
+        "running_summary": running_summary,
+        "current_thinking": "Summarizing research findings...",
+    }
 
 
 def reflect_on_summary(state: SummaryState, config: RunnableConfig):
@@ -364,8 +411,10 @@ def reflect_on_summary(state: SummaryState, config: RunnableConfig):
 
     messages = [
         SystemMessage(
-            content=formatted_prompt + (
-                tool_calling_reflection_instructions if configurable.use_tool_calling 
+            content=formatted_prompt
+            + (
+                tool_calling_reflection_instructions
+                if configurable.use_tool_calling
                 else json_mode_reflection_instructions
             )
         ),
@@ -374,14 +423,17 @@ def reflect_on_summary(state: SummaryState, config: RunnableConfig):
         ),
     ]
 
-    return generate_search_query_with_structured_output(
-        configurable=configurable,
-        messages=messages,
-        tool_class=FollowUpQuery,
-        fallback_query=f"Tell me more about {state.research_topic}",
-        tool_query_field="follow_up_query",
-        json_query_field="follow_up_query",
-    )
+    return {
+        **generate_search_query_with_structured_output(
+            configurable=configurable,
+            messages=messages,
+            tool_class=FollowUpQuery,
+            fallback_query=f"Tell me more about {state.research_topic}",
+            tool_query_field="follow_up_query",
+            json_query_field="follow_up_query",
+        ),
+        "current_thinking": "Reflecting on current knowledge and identifying gaps...",
+    }
 
 
 def finalize_summary(state: SummaryState):
