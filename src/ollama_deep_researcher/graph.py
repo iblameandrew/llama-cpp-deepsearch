@@ -127,13 +127,17 @@ def get_llm(configurable: Configuration):
             return ChatLlamaCpp(
                 base_url=configurable.llama_cpp_base_url,
                 model=configurable.local_llm,
-                temperature=0,
+                temperature=configurable.llama_cpp_temperature,
+                top_p=configurable.llama_cpp_top_p,
+                min_p=configurable.llama_cpp_min_p,
             )
         else:
             return ChatLlamaCpp(
                 base_url=configurable.llama_cpp_base_url,
                 model=configurable.local_llm,
-                temperature=0,
+                temperature=configurable.llama_cpp_temperature,
+                top_p=configurable.llama_cpp_top_p,
+                min_p=configurable.llama_cpp_min_p,
                 format="json",
             )
     elif configurable.llm_provider == "openrouter":

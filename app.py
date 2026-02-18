@@ -86,6 +86,30 @@ def main():
                 ),
             )
             set_config_value("llama_cpp_base_url", llama_cpp_base_url)
+            llama_cpp_temperature = st.number_input(
+                "llama-cpp Temperature",
+                min_value=0.0,
+                max_value=2.0,
+                value=get_config_value("llama_cpp_temperature", 0.7),
+                step=0.1,
+            )
+            set_config_value("llama_cpp_temperature", llama_cpp_temperature)
+            llama_cpp_top_p = st.number_input(
+                "llama-cpp Top P",
+                min_value=0.0,
+                max_value=1.0,
+                value=get_config_value("llama_cpp_top_p", 0.95),
+                step=0.05,
+            )
+            set_config_value("llama_cpp_top_p", llama_cpp_top_p)
+            llama_cpp_min_p = st.number_input(
+                "llama-cpp Min P",
+                min_value=0.0,
+                max_value=0.5,
+                value=get_config_value("llama_cpp_min_p", 0.05),
+                step=0.01,
+            )
+            set_config_value("llama_cpp_min_p", llama_cpp_min_p)
         elif llm_provider == "openrouter":
             openrouter_api_key = st.text_input(
                 "OpenRouter API Key",
@@ -207,6 +231,9 @@ def main():
                 "llama_cpp_base_url": get_config_value(
                     "llama_cpp_base_url", "http://127.0.0.1:8080/v1"
                 ),
+                "llama_cpp_temperature": get_config_value("llama_cpp_temperature", 0.7),
+                "llama_cpp_top_p": get_config_value("llama_cpp_top_p", 0.95),
+                "llama_cpp_min_p": get_config_value("llama_cpp_min_p", 0.05),
                 "openrouter_api_key": get_config_value("openrouter_api_key", ""),
                 "openrouter_model": get_config_value(
                     "openrouter_model", "stepfun/step-3.5-flash:free"
@@ -313,9 +340,16 @@ def main():
             progress_placeholder.success("✅ Research Complete!")
 
         except Exception as e:
+            import traceback
+
+            tb = traceback.format_exc()
+            print(tb)
+            error_msg = str(e) if str(e) else repr(e)
+            if not error_msg or error_msg == "()":
+                error_msg = f"Unknown error: {type(e).__name__}"
             st.session_state.research_status = "error"
-            st.session_state.error_message = str(e)
-            progress_placeholder.error(f"❌ Error: {str(e)}")
+            st.session_state.error_message = error_msg
+            progress_placeholder.error(f"❌ Error: {error_msg}")
 
         st.rerun()
 

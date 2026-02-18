@@ -63,6 +63,21 @@ class Configuration(BaseModel):
         title="llama-cpp Base URL",
         description="Base URL for llama-cpp-server OpenAI-compatible API",
     )
+    llama_cpp_temperature: float = Field(
+        default=0.7,
+        title="llama-cpp Temperature",
+        description="Temperature for sampling (0.0 - 2.0)",
+    )
+    llama_cpp_top_p: float = Field(
+        default=0.95,
+        title="llama-cpp Top P",
+        description="Nucleus sampling parameter (0.0 - 1.0)",
+    )
+    llama_cpp_min_p: float = Field(
+        default=0.05,
+        title="llama-cpp Min P",
+        description="Minimum probability threshold (0.0 - 0.5)",
+    )
     openrouter_api_key: str = Field(
         default="",
         title="OpenRouter API Key",
